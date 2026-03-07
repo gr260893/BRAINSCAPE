@@ -1,0 +1,17 @@
+{
+  "name": "CBR Quiz - Simulado Radiologia",
+  "short_name": "CBR Quiz",
+  "start_url": "/quiz.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

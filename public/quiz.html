@@ -2,8 +2,14 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>CBR Quiz - Simulado Radiologia</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#3b82f6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CBR Quiz">
+<link rel="apple-touch-icon" href="/icon.svg">
 <style>
 :root {
   --bg: #0f172a;
@@ -222,6 +228,27 @@ select { width: auto; }
 }
 .bookmark-btn.active { color: var(--warning); }
 .bookmark-btn:hover { color: var(--warning); }
+
+/* PWA download button */
+.dl-btn {
+  padding: 8px 16px; border: 1px solid var(--success); background: transparent;
+  color: var(--success); border-radius: 8px; cursor: pointer; font-size: 0.85rem;
+  transition: all 0.15s; white-space: nowrap;
+}
+.dl-btn:hover { background: var(--success-bg); }
+.dl-btn.downloading { border-color: var(--warning); color: var(--warning); cursor: wait; }
+.dl-btn.done { border-color: var(--success); color: var(--success); opacity: 0.7; cursor: default; }
+.dl-progress {
+  height: 3px; background: var(--border); border-radius: 2px; margin-top: 4px;
+  overflow: hidden; display: none;
+}
+.dl-progress.show { display: block; }
+.dl-progress .dl-fill {
+  height: 100%; background: var(--warning); border-radius: 2px; transition: width 0.2s; width: 0%;
+}
+
+/* iOS safe area */
+body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 </style>
 </head>
 <body>
@@ -254,7 +281,9 @@ select { width: auto; }
       <button class="btn" id="btnBookmarks" onclick="setMode('bookmarks')">Favoritas</button>
       <button class="btn" id="btnFilter" onclick="toggleFilter()">Filtros</button>
       <button class="btn" onclick="resetProgress()">Resetar</button>
+      <button class="dl-btn" id="btnDownload" onclick="downloadAllImages()">Baixar Offline</button>
     </div>
+    <div class="dl-progress" id="dlProgress"><div class="dl-fill" id="dlFill"></div></div>
 
     <!-- Filter panel -->
     <div id="filterPanel" class="filter-panel">
@@ -702,6 +731,67 @@ document.addEventListener('keydown', e => {
     if (q.options[letter]) selectOption(letter);
   }
 });
+
+// ======== PWA & Offline ========
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(reg => {
+    console.log('SW registered, scope:', reg.scope);
+  }).catch(err => {
+    console.log('SW registration failed:', err);
+  });
+
+  // Listen for download progress messages from SW
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data.type === 'DL_PROGRESS') {
+      const pct = Math.round(event.data.done / event.data.total * 100);
+      document.getElementById('dlFill').style.width = pct + '%';
+      document.getElementById('btnDownload').textContent =
+        `Baixando: ${event.data.done}/${event.data.total}`;
+    }
+    if (event.data.type === 'DL_COMPLETE') {
+      document.getElementById('dlProgress').classList.remove('show');
+      const btn = document.getElementById('btnDownload');
+      btn.textContent = 'Offline OK';
+      btn.classList.remove('downloading');
+      btn.classList.add('done');
+      localStorage.setItem('cbr_offline_done', 'true');
+    }
+  });
+}
+
+// Check if already downloaded
+if (localStorage.getItem('cbr_offline_done') === 'true') {
+  const btn = document.getElementById('btnDownload');
+  btn.textContent = 'Offline OK';
+  btn.classList.add('done');
+}
+
+function downloadAllImages() {
+  const btn = document.getElementById('btnDownload');
+  if (btn.classList.contains('downloading') || btn.classList.contains('done')) return;
+
+  if (!navigator.serviceWorker || !navigator.serviceWorker.controller) {
+    alert('Aguarde o carregamento completo e tente novamente.');
+    return;
+  }
+
+  // Collect all image URLs
+  const urls = allQuestions
+    .filter(q => q.image && q.image.length > 10)
+    .map(q => q.image);
+
+  if (urls.length === 0) { alert('Nenhuma imagem para baixar.'); return; }
+
+  btn.classList.add('downloading');
+  btn.textContent = `Baixando: 0/${urls.length}`;
+  document.getElementById('dlProgress').classList.add('show');
+  document.getElementById('dlFill').style.width = '0%';
+
+  navigator.serviceWorker.controller.postMessage({
+    type: 'DOWNLOAD_IMAGES',
+    urls: urls
+  });
+}
 
 init();
 </script>
